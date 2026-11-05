@@ -7,7 +7,7 @@ http.createServer(async(req,res)=>{
   try{
     const pathname=decodeURIComponent(new URL(req.url,'http://localhost').pathname);
     const name=pathname==='/'?'index.html':pathname.slice(1);
-    if(!['index.html','app.js','style.css'].includes(name)){res.writeHead(404);res.end('Not found');return;}
+    if(!['index.html','app.js','style.css','heroui.css','ui.js'].includes(name)){res.writeHead(404);res.end('Not found');return;}
     const data=await readFile(new URL(name,root));
     res.writeHead(200,{'Content-Type':types[name.slice(name.lastIndexOf('.'))],'Cache-Control':'no-store'});res.end(data);
   }catch{res.writeHead(500);res.end('Unable to read file');}
