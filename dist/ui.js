@@ -18,3 +18,36 @@ document.querySelectorAll('label.button').forEach(label=>{
 });
 document.querySelectorAll('[title]').forEach(button=>button.setAttribute('aria-label',button.title));
 refreshControls();
+
+// Keep detailed controls out of the photo area until a tool is requested.
+const mobileMedia=matchMedia('(max-width:800px)');
+const settingsPanel=document.querySelector('aside');
+settingsPanel.id='editor-settings';
+const settingsToggle=document.createElement('button');
+settingsToggle.className='mobile-settings-toggle';
+settingsToggle.type='button';
+settingsToggle.setAttribute('aria-controls','editor-settings');
+settingsPanel.prepend(settingsToggle);
+function setSettingsOpen(open){
+  settingsPanel.classList.toggle('mobile-open',open);
+  settingsToggle.setAttribute('aria-expanded',String(open));
+  settingsToggle.textContent=document.getElementById('paneltitle').textContent;
+  requestAnimationFrame(()=>document.getElementById('fit').click());
+}
+settingsToggle.addEventListener('click',()=>setSettingsOpen(!settingsPanel.classList.contains('mobile-open')));
+const toolNav=document.getElementById('nav');
+// Clicking the current tab must not discard an uncommitted adjustment.
+ toolNav.addEventListener('click',event=>{
+  const button=event.target.closest('[data-tab]');
+  if(!button||!mobileMedia.matches)return;
+  if(button.classList.contains('active')){
+    event.stopImmediatePropagation();
+    setSettingsOpen(!settingsPanel.classList.contains('mobile-open'));
+  }else requestAnimationFrame(()=>setSettingsOpen(true));
+ },true);
+// Manual landmark/source selection needs an unobstructed canvas.
+for(const id of ['manual','source'])document.getElementById(id).addEventListener('click',()=>{
+  if(mobileMedia.matches&&!document.getElementById('imagewrap').hidden)setSettingsOpen(false);
+});
+mobileMedia.addEventListener('change',()=>setSettingsOpen(false));
+setSettingsOpen(false);
