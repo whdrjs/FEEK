@@ -32,7 +32,7 @@ function setSettingsOpen(open){
   settingsPanel.classList.toggle('mobile-open',open);
   settingsToggle.setAttribute('aria-expanded',String(open));
   settingsToggle.textContent=document.getElementById('paneltitle').textContent;
-  requestAnimationFrame(()=>document.getElementById('fit').click());
+  requestAnimationFrame(()=>window.dispatchEvent(new Event('feek-panel-resize')));
 }
 settingsToggle.addEventListener('click',()=>setSettingsOpen(!settingsPanel.classList.contains('mobile-open')));
 const toolNav=document.getElementById('nav');

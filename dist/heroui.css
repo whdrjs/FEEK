@@ -72,3 +72,9 @@ footer{height:48px;flex-shrink:0;border-color:var(--divider);color:var(--muted);
   #nav button{min-height:40px;display:flex;align-items:center;justify-content:center;gap:8px}#nav button span{margin:0}
   aside.mobile-open{max-height:34dvh}#empty p{display:none}#empty h1{font-size:22px}#demo{display:inline-block;margin:0 4px}
 }
+
+@media(max-width:800px){
+  .has-photo aside:not(.mobile-open)>#brush:not([hidden]){display:grid!important;padding:0 4px 6px}
+  .has-photo aside:not(.mobile-open) #brush label{margin:0}
+  .has-photo #brush input{height:26px;margin:0;width:100%}
+}

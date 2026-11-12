@@ -4,23 +4,82 @@ const setStatus=s=>$('status').textContent=s;function toast(s){$('toast').textCo
 function controls(id,defs,vals,fn){$(id).innerHTML='';for(const[k,name]of defs){vals[k]=0;let d=document.createElement('div');d.innerHTML=`<label class="sliderlabel">${name}<output>0</output></label><input type="range" min="-100" max="100" value="0" aria-label="${name}">`;d.querySelector('input').oninput=e=>{if(!W)return;e.target.previousElementSibling.querySelector('output').textContent=e.target.value;vals[k]=+e.target.value;fn()};$(id).append(d)}}
 controls('faceControls',faceDefs,faceVals,renderFace);controls('lightControls',[['brightness','밝기'],['contrast','대비'],['saturation','채도']],lightVals,renderLight);
 function zero(id,vals){for(let k in vals)vals[k]=0;$(id).querySelectorAll('input').forEach(x=>x.value=0);$(id).querySelectorAll('output').forEach(x=>x.textContent='0')}
-function capture(){return ctx.getImageData(0,0,W,H)}function sync(){let img=capture();base=new Uint8ClampedArray(img.data);mx=new Float32Array(W*H);my=new Float32Array(W*H);for(let y=0,i=0;y<H;y++)for(let x=0;x<W;x++,i++){mx[i]=x;my[i]=y}}
+function capture(){return ctx.getImageData(0,0,W,H)}function sync(){let img=capture();base=img.data;mx=new Float32Array(W*H);my=new Float32Array(W*H);for(let y=0,i=0;y<H;y++)for(let x=0;x<W;x++,i++){mx[i]=x;my[i]=y}}
 function invalidatePoints(){points=null;$('faceStatus').textContent='현재 사진에서 얼굴 인식 또는 기준점 지정을 해주세요.'}function checkpoint(){history.push(capture());let limit=Math.max(2,Math.min(12,Math.floor(80e6/(W*H*4))));if(history.length>limit)history.shift();redo=[];buttons()}
 function buttons(){$('undo').disabled=!history.length;$('redo').disabled=!redo.length;$('save').disabled=!W;$('compare').disabled=!W}
 function clearPreview(){if(previewBase){ctx.putImageData(previewBase,0,0);previewBase=null;sync()}zero('faceControls',faceVals);zero('lightControls',lightVals)}
 async function loadFile(f){if(!f)return;try{const url=URL.createObjectURL(f),im=new Image();await new Promise((r,j)=>{im.onload=r;im.onerror=j;im.src=url});URL.revokeObjectURL(url);let ratio=Math.min(1,2400/Math.max(im.width,im.height));init(Math.round(im.width*ratio),Math.round(im.height*ratio));ctx.drawImage(im,0,0,W,H);original=capture();sync();$('filename').textContent=f.name;setStatus(`${W} × ${H}px${ratio<1?' · 편집용으로 축소됨':''}`);buttons();fit();if(ratio<1)toast('사진의 긴 변을 2,400px로 줄였습니다. 저장도 이 크기로 됩니다.')}catch(e){toast('사진을 열 수 없어요. JPG·PNG·WebP 파일을 선택해주세요.')}}
-function init(w,h){W=w;H=h;c.width=o.width=W;c.height=o.height=H;$('empty').hidden=true;$('imagewrap').hidden=false;history=[];redo=[];points=null;cloneSource=null;previewBase=null;manualIndex=-1;pickSource=false;drag=null;pointerMap.clear();zero('faceControls',faceVals);zero('lightControls',lightVals);$('faceStatus').textContent='얼굴 자동 인식 또는 기준점 직접 지정을 선택하세요.';ox.clearRect(0,0,W,H)}
+function init(w,h){W=w;H=h;showSettings();document.body.classList.add("has-photo");c.width=o.width=W;c.height=o.height=H;$('empty').hidden=true;$('imagewrap').hidden=false;history=[];redo=[];points=null;cloneSource=null;previewBase=null;manualIndex=-1;pickSource=false;drag=null;pointerMap.clear();zero('faceControls',faceVals);zero('lightControls',lightVals);$('faceStatus').textContent='얼굴 자동 인식 또는 기준점 직접 지정을 선택하세요.';ox.clearRect(0,0,W,H)}
 $('file').onchange=e=>loadFile(e.target.files[0]);$('file2').onchange=e=>loadFile(e.target.files[0]);$('stage').ondragover=e=>e.preventDefault();$('stage').ondrop=e=>{e.preventDefault();loadFile(e.dataTransfer.files[0])};
-function transform(){$('imagewrap').style.transform=`translate(${panX}px,${panY}px) scale(${zoom})`;$('zoomLabel').textContent=Math.round(zoom*100)+'%'}function fit(){if(!W)return;fitZoom=Math.min(($('stage').clientWidth-48)/W,($('stage').clientHeight-48)/H,1);zoom=fitZoom;panX=panY=0;transform()}$('fit').onclick=fit;$('plus').onclick=()=>{zoom=Math.min(5,zoom*1.25);transform()};$('minus').onclick=()=>{zoom=Math.max(.05,zoom/1.25);transform()};$('pan').onclick=()=>{panMode=!panMode;$('pan').classList.toggle('selected',panMode)};window.addEventListener('resize',fit);
+function transform(){$('imagewrap').style.transform=`translate(${panX}px,${panY}px) scale(${zoom})`;$('zoomLabel').textContent=Math.round(zoom*100)+'%'}function fit(){if(!W)return;fitZoom=Math.min(($('stage').clientWidth-48)/W,($('stage').clientHeight-48)/H,1);zoom=fitZoom;panX=panY=0;transform()}$('fit').onclick=fit;$('plus').onclick=()=>{zoom=Math.min(5,zoom*1.25);transform()};$('minus').onclick=()=>{zoom=Math.max(.05,zoom/1.25);transform()};$('pan').onclick=()=>{panMode=!panMode;$('pan').classList.toggle('selected',panMode)};function refitIfNeeded(){if(zoom===fitZoom&&!panX&&!panY)fit()}window.addEventListener('resize',refitIfNeeded);window.addEventListener('feek-panel-resize',refitIfNeeded);
 $('stage').onwheel=e=>{if(!W)return;e.preventDefault();zoom=Math.max(.05,Math.min(5,zoom*(e.deltaY>0?.9:1.1)));transform()};
-function pos(e){let r=c.getBoundingClientRect();return{x:(e.clientX-r.left)/zoom,y:(e.clientY-r.top)/zoom}}function radius(){return +$('size').value/2}function power(){return +$('power').value/100}
-for(const id of ['size','power'])$(id).oninput=()=>$(id+'Value').textContent=$(id).value+(id==='power'?'%':'');
+function pos(e){let r=c.getBoundingClientRect();return{x:(e.clientX-r.left)/zoom,y:(e.clientY-r.top)/zoom}}function radius(){return Math.max(1,Math.min(W,H)*Number($('size').value)/200)}function power(){return +$('power').value/100}
+let ringTimer;
+function showSettings(){
+  $('sizeValue').textContent=$('size').value+'%'+(W?' · '+Math.round(radius()*2)+'px':'');
+  $('powerValue').textContent=$('power').value+'%';
+}
+for(const id of ['size','power']) $(id).oninput=()=>{
+  showSettings();
+  if(!W)return;
+  const stage=$('stage').getBoundingClientRect();
+  const point=pos({clientX:stage.left+stage.width/2,clientY:stage.top+stage.height/2});
+  dot(Math.max(0,Math.min(W-1,point.x)),Math.max(0,Math.min(H-1,point.y)));
+  ringTimer=setTimeout(()=>ox.clearRect(0,0,W,H),800);
+};
 function sample(arr,x,y,channel=0,channels=1){x=Math.max(0,Math.min(W-1,x));y=Math.max(0,Math.min(H-1,y));let x0=Math.floor(x),y0=Math.floor(y),x1=Math.min(W-1,x0+1),y1=Math.min(H-1,y0+1),a=x-x0,b=y-y0;return arr[(y0*W+x0)*channels+channel]*(1-a)*(1-b)+arr[(y0*W+x1)*channels+channel]*a*(1-b)+arr[(y1*W+x0)*channels+channel]*(1-a)*b+arr[(y1*W+x1)*channels+channel]*a*b}
-function warp(cx,cy,rx,ry,dx,dy,sx=0,sy=0){let l=Math.max(0,Math.floor(cx-rx)),t=Math.max(0,Math.floor(cy-ry)),r=Math.min(W,Math.ceil(cx+rx)),b=Math.min(H,Math.ceil(cy+ry));if(r<=l||b<=t)return;let oldx=mx.slice(),oldy=my.slice(),im=ctx.getImageData(l,t,r-l,b-t);for(let y=t;y<b;y++)for(let x=l;x<r;x++){let q=((x-cx)/rx)**2+((y-cy)/ry)**2;if(q>=1)continue;let f=(1-q)**2,px=x-dx*f-(x-cx)*sx*f,py=y-dy*f-(y-cy)*sy*f,i=y*W+x;mx[i]=sample(oldx,px,py);my[i]=sample(oldy,px,py);let j=((y-t)*(r-l)+x-l)*4;for(let k=0;k<4;k++)im.data[j+k]=sample(base,mx[i],my[i],k,4)}ctx.putImageData(im,l,t)}
-function dot(x,y){ox.clearRect(0,0,W,H);ox.strokeStyle='#e4f7d9';ox.lineWidth=1/zoom;ox.beginPath();ox.arc(x,y,radius(),0,Math.PI*2);ox.stroke();if(cloneSource){ox.strokeStyle='#f0b874';ox.beginPath();ox.arc(cloneSource.x,cloneSource.y,5/zoom,0,7);ox.stroke()}}
-function heal(x,y,clone=false){let rad=Math.max(3,radius()),source=cloneSource,src=capture().data;if(!clone){let best=Infinity;for(let angle=0;angle<16;angle++){let a=angle*Math.PI/8,px=x+Math.cos(a)*rad*2.8,py=y+Math.sin(a)*rad*2.8;if(px-rad<0||py-rad<0||px+rad>=W||py+rad>=H)continue;let err=0;for(let j=0;j<24;j++){let th=j*Math.PI/12,xx=Math.cos(th)*rad,yy=Math.sin(th)*rad;for(let k=0;k<3;k++)err+=(sample(src,x+xx,y+yy,k,4)-sample(src,px+xx,py+yy,k,4))**2}if(err<best){best=err;source={x:px,y:py}}}if(!source){toast('사진 가장자리에서는 브러시 크기를 줄여주세요.');return}}if(!source)return;let shift=[0,0,0];if(!clone){for(let j=0;j<24;j++){let th=j*Math.PI/12;for(let k=0;k<3;k++)shift[k]+=(sample(src,x+Math.cos(th)*rad,y+Math.sin(th)*rad,k,4)-sample(src,source.x+Math.cos(th)*rad,source.y+Math.sin(th)*rad,k,4))/24}}let l=Math.max(0,Math.floor(x-rad)),t=Math.max(0,Math.floor(y-rad)),r=Math.min(W,Math.ceil(x+rad)),b=Math.min(H,Math.ceil(y+rad)),im=ctx.getImageData(l,t,r-l,b-t);for(let yy=t;yy<b;yy++)for(let xx=l;xx<r;xx++){let d=Math.hypot(xx-x,yy-y)/rad;if(d>=1)continue;let mix=Math.min(1,(1-d)*4)*(clone?power():1),j=((yy-t)*(r-l)+xx-l)*4;for(let k=0;k<3;k++)im.data[j+k]=im.data[j+k]*(1-mix)+(sample(src,source.x+xx-x,source.y+yy-y,k,4)+shift[k])*mix}ctx.putImageData(im,l,t)}
-const pointerMap=new Map();$('stage').onpointerdown=e=>{if(!W||e.target.closest('button,label'))return;pointerMap.set(e.pointerId,{x:e.clientX,y:e.clientY});$('stage').setPointerCapture(e.pointerId);if(pointerMap.size===2){let a=[...pointerMap.values()];drag={pinch:true,d:Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y),z:zoom};return}let p=pos(e);if(panMode||e.button===1){drag={pan:true,x:e.clientX,y:e.clientY,px:panX,py:panY};return}if(p.x<0||p.y<0||p.x>=W||p.y>=H)return;if(manualIndex>=0){manualPoint(p);return}if(pickSource){cloneSource=p;pickSource=false;$('sourceInfo').textContent='복사 위치 지정됨 · 사진에 칠해 적용하세요';dot(p.x,p.y);return}if(tab==='face'||tab==='light')return;if(tool==='clone'&&!cloneSource){toast('먼저 복사할 위치를 지정해주세요.');return}checkpoint();invalidatePoints();drag={...p};if(tool==='heal')heal(p.x,p.y);else if(tool==='clone')heal(p.x,p.y,true);else if(tool!=='push')warp(p.x,p.y,radius(),radius(),0,0,(tool==='bloat'?1:-1)*power()*.3,(tool==='bloat'?1:-1)*power()*.3);dot(p.x,p.y)};
-$('stage').onpointermove=e=>{if(!W)return;if(pointerMap.has(e.pointerId))pointerMap.set(e.pointerId,{x:e.clientX,y:e.clientY});if(drag?.pinch){let a=[...pointerMap.values()];if(a.length===2){zoom=Math.max(.05,Math.min(5,drag.z*Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y)/drag.d));transform()}return}if(drag?.pan){panX=drag.px+e.clientX-drag.x;panY=drag.py+e.clientY-drag.y;transform();return}let p=pos(e);if(tab!=='face'&&tab!=='light')dot(p.x,p.y);if(!drag||tool==='heal')return;let dx=p.x-drag.x,dy=p.y-drag.y;if(Math.hypot(dx,dy)<1)return;if(tool==='push')warp(p.x,p.y,radius(),radius(),Math.max(-radius()/3,Math.min(radius()/3,dx))*power(),Math.max(-radius()/3,Math.min(radius()/3,dy))*power());else if(tool==='clone')heal(p.x,p.y,true);else warp(p.x,p.y,radius(),radius(),0,0,(tool==='bloat'?1:-1)*power()*.08,(tool==='bloat'?1:-1)*power()*.08);drag=p};function end(e){pointerMap.delete(e.pointerId);drag=null;if(tab==='heal'&&W)sync()}$('stage').onpointerup=end;$('stage').onpointercancel=end;$('stage').onpointerleave=()=>{if(manualIndex<0)ox.clearRect(0,0,W,H)};
+function warp(cx,cy,rx,ry,dx,dy,sx=0,sy=0){
+  if(!dx&&!dy&&!sx&&!sy)return;
+  const left=Math.max(0,Math.floor(cx-rx)), top=Math.max(0,Math.floor(cy-ry));
+  const width=Math.min(W,Math.ceil(cx+rx))-left, height=Math.min(H,Math.ceil(cy+ry))-top;
+  if(width<=0||height<=0)return;
+  const nextX=new Float32Array(width*height),nextY=new Float32Array(width*height);
+  const image=ctx.getImageData(left,top,width,height);
+  for(let row=0;row<height;row++){
+    const y=top+row, start=y*W+left, offset=row*width;
+    nextX.set(mx.subarray(start,start+width),offset);
+    nextY.set(my.subarray(start,start+width),offset);
+    for(let column=0;column<width;column++){
+      const x=left+column, q=((x-cx)/rx)**2+((y-cy)/ry)**2;
+      if(q>=1)continue;
+      const f=(1-q)**2,px=x-(dx+(x-cx)*sx)*f,py=y-(dy+(y-cy)*sy)*f,i=offset+column;
+      nextX[i]=sample(mx,px,py);nextY[i]=sample(my,px,py);
+      for(let k=0;k<4;k++)image.data[i*4+k]=sample(base,nextX[i],nextY[i],k,4);
+    }
+  }
+  for(let row=0;row<height;row++){
+    const start=(top+row)*W+left,offset=row*width;
+    mx.set(nextX.subarray(offset,offset+width),start);
+    my.set(nextY.subarray(offset,offset+width),start);
+  }
+  ctx.putImageData(image,left,top);
+}
+function dot(x,y){clearTimeout(ringTimer);ox.clearRect(0,0,W,H);ox.strokeStyle='#e4f7d9';ox.lineWidth=1/zoom;ox.beginPath();ox.arc(x,y,radius(),0,Math.PI*2);ox.stroke();if(cloneSource){ox.strokeStyle='#f0b874';ox.beginPath();ox.arc(cloneSource.x,cloneSource.y,5/zoom,0,7);ox.stroke()}}
+function heal(x,y,clone=false){let rad=radius(),source=clone?{x:cloneSource.x+x-drag.origin.x,y:cloneSource.y+y-drag.origin.y}:null,src=history[history.length-1].data;if(!clone){let best=Infinity;for(let angle=0;angle<16;angle++){let a=angle*Math.PI/8,px=x+Math.cos(a)*rad*2.8,py=y+Math.sin(a)*rad*2.8;if(px-rad<0||py-rad<0||px+rad>=W||py+rad>=H)continue;let err=0;for(let j=0;j<24;j++){let th=j*Math.PI/12,xx=Math.cos(th)*rad,yy=Math.sin(th)*rad;for(let k=0;k<3;k++)err+=(sample(src,x+xx,y+yy,k,4)-sample(src,px+xx,py+yy,k,4))**2}if(err<best){best=err;source={x:px,y:py}}}if(!source){toast('사진 가장자리에서는 브러시 크기를 줄여주세요.');return}}if(!source)return;let shift=[0,0,0];if(!clone){for(let j=0;j<24;j++){let th=j*Math.PI/12;for(let k=0;k<3;k++)shift[k]+=(sample(src,x+Math.cos(th)*rad,y+Math.sin(th)*rad,k,4)-sample(src,source.x+Math.cos(th)*rad,source.y+Math.sin(th)*rad,k,4))/24}}let l=Math.max(0,Math.floor(x-rad)),t=Math.max(0,Math.floor(y-rad)),r=Math.min(W,Math.ceil(x+rad)),b=Math.min(H,Math.ceil(y+rad)),im=ctx.getImageData(l,t,r-l,b-t);for(let yy=t;yy<b;yy++)for(let xx=l;xx<r;xx++){let d=Math.hypot(xx-x,yy-y)/rad;if(d>=1)continue;let mix=Math.min(1,(1-d)*4)*power(),j=((yy-t)*(r-l)+xx-l)*4;for(let k=0;k<3;k++)im.data[j+k]=im.data[j+k]*(1-mix)+(sample(src,source.x+xx-x,source.y+yy-y,k,4)+shift[k])*mix}ctx.putImageData(im,l,t)}
+const pointerMap=new Map();$('stage').onpointerdown=e=>{if(!W||e.target.closest('button,label'))return;pointerMap.set(e.pointerId,{x:e.clientX,y:e.clientY});$('stage').setPointerCapture(e.pointerId);if(pointerMap.size===2){let a=[...pointerMap.values()];drag={pinch:true,d:Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y),z:zoom};return}let p=pos(e);if(panMode||e.button===1){drag={pan:true,x:e.clientX,y:e.clientY,px:panX,py:panY};return}if(p.x<0||p.y<0||p.x>=W||p.y>=H)return;if(manualIndex>=0){manualPoint(p);return}if(pickSource){cloneSource=p;pickSource=false;$('sourceInfo').textContent='복사 위치 지정됨 · 사진에 칠해 적용하세요';dot(p.x,p.y);return}if(tab==='face'||tab==='light')return;if(tool==='clone'&&!cloneSource){toast('먼저 복사할 위치를 지정해주세요.');return}if(!power())return;checkpoint();invalidatePoints();drag={...p,origin:p};if(tool==='heal')heal(p.x,p.y);else if(tool==='clone')heal(p.x,p.y,true);else if(tool!=='push')warp(p.x,p.y,radius(),radius(),0,0,(tool==='bloat'?1:-1)*power()*.3,(tool==='bloat'?1:-1)*power()*.3);dot(p.x,p.y)};
+$('stage').onpointermove=e=>{if(!W)return;if(pointerMap.has(e.pointerId))pointerMap.set(e.pointerId,{x:e.clientX,y:e.clientY});if(drag?.pinch){let a=[...pointerMap.values()];if(a.length===2){zoom=Math.max(.05,Math.min(5,drag.z*Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y)/drag.d));transform()}return}if(drag?.pan){panX=drag.px+e.clientX-drag.x;panY=drag.py+e.clientY-drag.y;transform();return}let p=pos(e);if(tab!=='face'&&tab!=='light')dot(p.x,p.y);if(drag&&pointerMap.has(e.pointerId))strokeTo(p,false)};
+function strokeTo(target,finish){
+  if(tool==='heal')return;
+  const rad=radius(),spacing=Math.max(1,rad*.3);
+  const dx=target.x-drag.x,dy=target.y-drag.y,distance=Math.hypot(dx,dy);
+  if(!distance)return;
+  const steps=finish?Math.ceil(distance/spacing):Math.floor(distance/spacing);
+  const startX=drag.x,startY=drag.y;
+  for(let n=1;n<=steps;n++){
+    const fraction=Math.min(1,n*spacing/distance),x=startX+fraction*dx,y=startY+fraction*dy;
+    if(tool==='push')warp(x,y,rad,rad,(x-drag.x)*power(),(y-drag.y)*power());
+    else if(tool==='clone')heal(x,y,true);
+    else {
+      const scale=(tool==='bloat'?1:-1)*power()*.12*Math.hypot(x-drag.x,y-drag.y)/spacing;
+      warp(x,y,rad,rad,0,0,scale,scale);
+    }
+    drag.x=x;drag.y=y;
+  }
+}
+function end(e){
+  if(pointerMap.has(e.pointerId)&&drag?.origin&&e.type==='pointerup')strokeTo(pos(e),true);
+  pointerMap.delete(e.pointerId);drag=null;
+}$('stage').onpointerup=end;$('stage').onpointercancel=end;$('stage').onpointerleave=()=>{if(manualIndex<0)ox.clearRect(0,0,W,H)};
 function switchTab(name){clearPreview();tab=name;manualIndex=-1;pickSource=false;ox.clearRect(0,0,W,H);document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));for(let p of ['warp','face','heal','light'])$(p+'Panel').hidden=p!==name;$('brush').hidden=['face','light'].includes(name);$('paneltitle').textContent={warp:'리셰이프',face:'얼굴 조절',heal:'잡티 복구',light:'밝기·색감'}[name];$('desc').textContent={warp:'원하는 부분을 직접 움직여보세요.',face:'비율을 조금씩, 나답게 조절하세요.',heal:'작은 잡티를 주변 피부결로 복구하세요.',light:'사진의 빛과 색을 다듬어보세요.'}[name];if(W)sync();selectTool(name==='heal'?'heal':'push')}
 function selectTool(t){tool=t;document.querySelectorAll('[data-tool]').forEach(b=>b.classList.toggle('selected',b.dataset.tool===t))}document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));document.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>selectTool(b.dataset.tool));$('source').onclick=()=>{if(!W)return;pickSource=true;selectTool('clone');toast('사진에서 복사할 깨끗한 부분을 눌러주세요.')};
 const manualNames=['화면 왼쪽 눈 중심','화면 오른쪽 눈 중심','코끝','입 중심','턱 끝'];$('manual').onclick=()=>{if(!W)return;clearPreview();points={};manualIndex=0;toast(manualNames[0]+'을 눌러주세요');$('faceStatus').textContent=manualNames[0]+' 지정 중'};function manualPoint(p){points[['left','right','nose','mouth','chin'][manualIndex]]=p;manualIndex++;ox.fillStyle='#c9edbc';ox.beginPath();ox.arc(p.x,p.y,4/zoom,0,7);ox.fill();if(manualIndex===5){manualIndex=-1;points.width=Math.max(10,Math.hypot(points.right.x-points.left.x,points.right.y-points.left.y)*2.2);$('faceStatus').textContent='기준점 5개 지정 완료 · 슬라이더로 조절하세요';ox.clearRect(0,0,W,H)}else{$('faceStatus').textContent=manualNames[manualIndex]+' 지정 중';toast(manualNames[manualIndex]+'을 눌러주세요')}}
